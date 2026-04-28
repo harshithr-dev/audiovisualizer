@@ -1,88 +1,1231 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ambient Lens — Audio Visualizer</title>
-    <link rel="stylesheet" href="css/style.css">
-    <!-- TensorFlow.js and COCO-SSD -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
-    <!-- Tone.js for synthesis -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>RoomSound — AI Audio Visualizer</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+<style>
+:root {
+  --bg: #060609;
+  --surface: #0e0e18;
+  --card: #11111d;
+  --card2: #16162a;
+  --border: #1f1f38;
+  --border2: #2a2a4a;
+  --accent: #6d28d9;
+  --accent-light: #8b5cf6;
+  --cyan: #22d3ee;
+  --cyan-dim: #0891b2;
+  --amber: #f59e0b;
+  --green: #10b981;
+  --red: #ef4444;
+  --text: #f4f4ff;
+  --text2: #9191b8;
+  --text3: #4a4a7a;
+  --font: 'Syne', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ---- NOISE OVERLAY ---- */
+body::before {
+  content:'';
+  position:fixed; inset:0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  opacity: 0.025;
+  pointer-events:none;
+  z-index:0;
+}
+
+/* ---- AMBIENT GLOW ---- */
+.ambient-glow {
+  position:fixed;
+  width:600px; height:600px;
+  border-radius:50%;
+  filter:blur(120px);
+  pointer-events:none;
+  z-index:0;
+  opacity:0.07;
+  background: radial-gradient(circle, var(--accent), transparent 70%);
+  top:-100px; left:-100px;
+  transition: background 3s ease;
+}
+.ambient-glow2 {
+  position:fixed;
+  width:400px; height:400px;
+  border-radius:50%;
+  filter:blur(100px);
+  pointer-events:none;
+  z-index:0;
+  opacity:0.06;
+  background: radial-gradient(circle, var(--cyan), transparent 70%);
+  bottom:-50px; right:-50px;
+}
+
+/* ---- LAYOUT ---- */
+.shell {
+  position:relative;
+  z-index:1;
+  max-width:960px;
+  margin:0 auto;
+  padding:24px 20px 40px;
+  display:flex;
+  flex-direction:column;
+  gap:20px;
+}
+
+/* ---- HEADER ---- */
+.header {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:8px 0;
+  border-bottom:1px solid var(--border);
+  padding-bottom:20px;
+}
+.logo-group {}
+.logo {
+  font-size:clamp(22px,4vw,36px);
+  font-weight:800;
+  letter-spacing:-0.5px;
+  background: linear-gradient(135deg, #c4b5fd 0%, var(--cyan) 60%, var(--amber) 100%);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+  line-height:1;
+}
+.tagline {
+  font-family:var(--mono);
+  font-size:10px;
+  color:var(--text3);
+  letter-spacing:2px;
+  margin-top:5px;
+}
+.header-right {
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.version-badge {
+  background: var(--card);
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:5px 10px;
+  font-family:var(--mono);
+  font-size:10px;
+  color:var(--text3);
+  letter-spacing:1px;
+}
+
+/* ---- API KEY BANNER ---- */
+.api-banner {
+  background: linear-gradient(135deg, rgba(109,40,217,0.15), rgba(34,211,238,0.08));
+  border:1px solid rgba(109,40,217,0.4);
+  border-radius:14px;
+  padding:16px 20px;
+  display:flex;
+  align-items:center;
+  gap:16px;
+  flex-wrap:wrap;
+}
+.api-icon {
+  font-size:22px;
+  flex-shrink:0;
+}
+.api-banner-text {
+  flex:1;
+  min-width:200px;
+}
+.api-banner-title {
+  font-size:13px;
+  font-weight:700;
+  color:var(--accent-light);
+  letter-spacing:0.5px;
+  margin-bottom:3px;
+}
+.api-banner-sub {
+  font-family:var(--mono);
+  font-size:10px;
+  color:var(--text2);
+}
+.api-input-wrap {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex:2;
+  min-width:260px;
+}
+.api-input {
+  flex:1;
+  background:var(--bg);
+  border:1px solid var(--border2);
+  border-radius:8px;
+  padding:9px 14px;
+  font-family:var(--mono);
+  font-size:12px;
+  color:var(--cyan);
+  outline:none;
+  transition:border-color 0.2s, box-shadow 0.2s;
+  letter-spacing:0.5px;
+}
+.api-input::placeholder { color:var(--text3); }
+.api-input:focus {
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(109,40,217,0.2);
+}
+.api-input.valid { border-color:var(--green); }
+.btn-save-key {
+  background: var(--accent);
+  border:none;
+  border-radius:8px;
+  padding:9px 16px;
+  font-family:var(--font);
+  font-size:12px;
+  font-weight:700;
+  color:white;
+  cursor:pointer;
+  letter-spacing:0.5px;
+  transition:all 0.2s;
+  white-space:nowrap;
+}
+.btn-save-key:hover { background:var(--accent-light); transform:translateY(-1px); }
+.api-status {
+  font-family:var(--mono);
+  font-size:10px;
+  padding:4px 10px;
+  border-radius:20px;
+  white-space:nowrap;
+}
+.api-status.ok { background:rgba(16,185,129,0.1); border:1px solid var(--green); color:var(--green); }
+.api-status.err { background:rgba(239,68,68,0.1); border:1px solid var(--red); color:var(--red); }
+.api-status.idle { background:var(--card); border:1px solid var(--border); color:var(--text3); }
+
+/* ---- STATUS ROW ---- */
+.status-row {
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.status-chip {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:8px 14px;
+  font-family:var(--mono);
+  font-size:10px;
+  color:var(--text3);
+  flex:1;
+  min-width:130px;
+  transition:border-color 0.3s;
+}
+.status-chip.active { border-color:var(--border2); color:var(--text2); }
+.pip {
+  width:7px; height:7px;
+  border-radius:50%;
+  background:var(--border);
+  flex-shrink:0;
+  transition:all 0.3s;
+}
+.pip.green { background:var(--green); box-shadow:0 0 8px var(--green); animation:breathe 2s infinite; }
+.pip.blue { background:var(--cyan); box-shadow:0 0 8px var(--cyan); animation:breathe 2s infinite 0.4s; }
+.pip.amber { background:var(--amber); box-shadow:0 0 8px var(--amber); animation:breathe 2s infinite 0.8s; }
+.pip.spin { animation:none; border:2px solid var(--accent-light); border-top-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite; background:transparent; }
+@keyframes breathe { 0%,100%{opacity:1}50%{opacity:0.3} }
+@keyframes spin { to{transform:rotate(360deg)} }
+
+.obj-badge {
+  margin-left:auto;
+  background:rgba(245,158,11,0.1);
+  border:1px solid rgba(245,158,11,0.3);
+  border-radius:6px;
+  padding:4px 10px;
+  font-family:var(--mono);
+  font-size:10px;
+  color:var(--amber);
+  letter-spacing:1px;
+}
+
+/* ---- MAIN GRID ---- */
+.main-grid {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+}
+@media(max-width:600px){.main-grid{grid-template-columns:1fr;}}
+
+/* ---- CAM / VIZ CARDS ---- */
+.media-card {
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:16px;
+  overflow:hidden;
+  position:relative;
+  aspect-ratio:4/3;
+}
+.media-card video {
+  width:100%; height:100%;
+  object-fit:cover;
+  display:block;
+  transform:scaleX(-1);
+}
+.media-card canvas {
+  width:100%; height:100%;
+  display:block;
+}
+.media-overlay {
+  position:absolute; inset:0;
+  background:linear-gradient(to top, rgba(6,6,9,0.85) 0%, transparent 50%);
+  pointer-events:none;
+}
+.media-chip {
+  position:absolute;
+  top:12px; left:12px;
+  background:rgba(6,6,9,0.75);
+  backdrop-filter:blur(8px);
+  border:1px solid var(--border2);
+  border-radius:6px;
+  padding:5px 10px;
+  font-family:var(--mono);
+  font-size:9px;
+  letter-spacing:2px;
+  color:var(--text3);
+}
+.media-corner {
+  position:absolute;
+  top:12px; right:12px;
+  width:20px; height:20px;
+}
+.media-corner::before, .media-corner::after {
+  content:'';
+  position:absolute;
+  background:var(--accent-light);
+}
+.media-corner::before { top:0; right:0; width:2px; height:10px; }
+.media-corner::after { top:0; right:0; width:10px; height:2px; }
+
+.cam-placeholder {
+  position:absolute; inset:0;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  gap:14px;
+  background:var(--surface);
+}
+.cam-icon-svg {
+  width:48px; height:48px;
+  opacity:0.2;
+  color:var(--text2);
+}
+.cam-placeholder p {
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:3px;
+  color:var(--text3);
+}
+
+/* ---- SCENE ROW ---- */
+.scene-row {
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:14px;
+  align-items:start;
+}
+@media(max-width:520px){.scene-row{grid-template-columns:1fr;}}
+
+.scene-card {
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:18px;
+}
+.section-label {
+  font-family:var(--mono);
+  font-size:9px;
+  letter-spacing:3px;
+  color:var(--text3);
+  margin-bottom:12px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.section-label::after { content:''; flex:1; height:1px; background:var(--border); }
+
+.tags-wrap {
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+  min-height:36px;
+}
+.tag {
+  background:rgba(34,211,238,0.06);
+  border:1px solid rgba(34,211,238,0.15);
+  border-radius:20px;
+  padding:4px 12px;
+  font-family:var(--mono);
+  font-size:10px;
+  color:var(--cyan);
+  animation:popIn 0.25s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes popIn { from{opacity:0;transform:scale(0.7)} to{opacity:1;transform:scale(1)} }
+.tag.empty { color:var(--text3); border-color:var(--border); background:transparent; border-style:dashed; }
+
+.swatches {
+  display:flex;
+  gap:6px;
+  margin-top:12px;
+}
+.swatch {
+  flex:1; height:28px;
+  border-radius:6px;
+  border:1px solid var(--border);
+  transition:background 0.8s ease;
+  position:relative;
+  overflow:hidden;
+}
+.swatch::after {
+  content:'';
+  position:absolute; inset:0;
+  background:linear-gradient(135deg, rgba(255,255,255,0.08), transparent);
+}
+
+.colors-card {
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:18px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  min-width:100px;
+}
+.color-label {
+  font-family:var(--mono);
+  font-size:9px;
+  letter-spacing:2px;
+  color:var(--text3);
+  text-align:center;
+}
+.big-swatch {
+  flex:1;
+  border-radius:8px;
+  border:1px solid var(--border);
+  min-height:50px;
+  transition:background 0.8s ease;
+}
+
+/* ---- AI CARD ---- */
+.ai-card {
+  background:var(--card);
+  border:1px solid var(--border2);
+  border-radius:16px;
+  padding:22px;
+  position:relative;
+  overflow:hidden;
+}
+.ai-card::before {
+  content:'';
+  position:absolute; inset:0;
+  background: radial-gradient(ellipse at top left, rgba(109,40,217,0.08), transparent 60%);
+  pointer-events:none;
+}
+.mood-row {
+  display:flex;
+  align-items:baseline;
+  gap:14px;
+  margin-bottom:12px;
+}
+.mood-word {
+  font-size:clamp(24px,5vw,40px);
+  font-weight:800;
+  letter-spacing:-0.5px;
+  background:linear-gradient(90deg, var(--accent-light), var(--cyan));
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+  min-width:100px;
+  line-height:1;
+}
+.mood-instrument {
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--text3);
+  border:1px solid var(--border);
+  border-radius:4px;
+  padding:3px 8px;
+}
+.ai-description {
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--text2);
+  line-height:1.9;
+  min-height:44px;
+  margin-bottom:18px;
+}
+
+/* ---- PARAMS GRID ---- */
+.params-grid {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+.param-block {
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:12px 14px;
+}
+.param-header {
+  display:flex;
+  justify-content:space-between;
+  align-items:baseline;
+  margin-bottom:8px;
+}
+.param-name {
+  font-family:var(--mono);
+  font-size:9px;
+  letter-spacing:2px;
+  color:var(--text3);
+}
+.param-val {
+  font-family:var(--mono);
+  font-size:13px;
+  color:var(--text);
+  font-weight:500;
+}
+.bar-track {
+  height:3px;
+  background:var(--border);
+  border-radius:2px;
+  overflow:hidden;
+}
+.bar-fill {
+  height:100%;
+  border-radius:2px;
+  transition:width 1.2s cubic-bezier(0.4,0,0.2,1);
+  background:linear-gradient(90deg, var(--accent), var(--cyan));
+}
+
+/* ---- WAVEFORM ---- */
+.wave-shell {
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:14px;
+  height:72px;
+  display:flex;
+  align-items:center;
+  gap:2px;
+  padding:12px 16px;
+  overflow:hidden;
+}
+.wbar {
+  flex:1;
+  border-radius:2px;
+  height:4px;
+  min-height:2px;
+  max-height:48px;
+  transition:height 0.08s ease;
+  background:linear-gradient(to top, var(--accent), var(--cyan));
+}
+
+/* ---- CONTROLS ---- */
+.controls {
+  display:grid;
+  grid-template-columns:1fr 1fr auto;
+  gap:10px;
+  align-items:center;
+}
+@media(max-width:500px){.controls{grid-template-columns:1fr 1fr;}}
+
+.btn {
+  padding:14px 20px;
+  border-radius:10px;
+  border:none;
+  font-family:var(--font);
+  font-size:13px;
+  font-weight:700;
+  letter-spacing:0.5px;
+  cursor:pointer;
+  transition:all 0.18s;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+}
+.btn:active { transform:scale(0.96); }
+.btn:disabled { opacity:0.35; cursor:not-allowed; transform:none; }
+
+.btn-start {
+  background: linear-gradient(135deg, var(--accent) 0%, #4c1d95 100%);
+  color:white;
+  box-shadow: 0 4px 20px rgba(109,40,217,0.35);
+}
+.btn-start:hover:not(:disabled) {
+  box-shadow:0 6px 30px rgba(109,40,217,0.55);
+  transform:translateY(-1px);
+}
+
+.btn-analyze {
+  background: linear-gradient(135deg, #0e7490 0%, var(--cyan-dim) 100%);
+  color:white;
+  box-shadow:0 4px 20px rgba(34,211,238,0.2);
+}
+.btn-analyze:hover:not(:disabled) {
+  box-shadow:0 6px 30px rgba(34,211,238,0.35);
+  transform:translateY(-1px);
+}
+
+.btn-stop {
+  background:var(--card);
+  color:var(--text2);
+  border:1px solid var(--border2);
+  padding:14px;
+  width:48px;
+  height:48px;
+}
+.btn-stop:hover { border-color:var(--red); color:var(--red); }
+
+/* ---- LOG ---- */
+.log-shell {
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:14px 18px;
+  max-height:130px;
+  overflow-y:auto;
+}
+.log-shell::-webkit-scrollbar { width:4px; }
+.log-shell::-webkit-scrollbar-track { background:transparent; }
+.log-shell::-webkit-scrollbar-thumb { background:var(--border2); border-radius:2px; }
+
+.log-entry {
+  display:flex;
+  gap:10px;
+  padding:4px 0;
+  border-bottom:1px solid rgba(31,31,56,0.6);
+  font-family:var(--mono);
+  font-size:10px;
+  animation:fadeSlide 0.3s ease;
+}
+@keyframes fadeSlide { from{opacity:0;transform:translateX(-6px)} to{opacity:1;transform:translateX(0)} }
+.log-time { color:var(--text3); flex-shrink:0; }
+.log-msg { color:var(--text2); }
+.log-entry.good .log-msg { color:var(--green); }
+.log-entry.warn .log-msg { color:var(--amber); }
+.log-entry.err .log-msg { color:var(--red); }
+.log-entry.info .log-msg { color:var(--cyan); }
+
+/* ---- FOOTER ---- */
+.footer {
+  text-align:center;
+  font-family:var(--mono);
+  font-size:9px;
+  color:var(--text3);
+  letter-spacing:2px;
+  padding-top:8px;
+  border-top:1px solid var(--border);
+}
+</style>
 </head>
 <body>
-    <div id="loading-screen">
-        <div class="loader"></div>
-        <p>Loading AI Models...</p>
-        <p class="sub">This may take 10-20 seconds</p>
+
+<div class="ambient-glow" id="ambient-glow"></div>
+<div class="ambient-glow2"></div>
+
+<div class="shell">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo-group">
+      <div class="logo">ROOMSOUND</div>
+      <div class="tagline">// AI AUDIO VISUALIZER — YOUR ROOM COMPOSES ITS OWN MUSIC</div>
+    </div>
+    <div class="header-right">
+      <div class="version-badge">v2.0</div>
+    </div>
+  </div>
+
+  <!-- ╔══════════════════════════════════════════════════╗ -->
+  <!-- ║        🔑  PASTE YOUR GROQ API KEY HERE  🔑      ║ -->
+  <!-- ╚══════════════════════════════════════════════════╝ -->
+  <div class="api-banner">
+    <div class="api-icon">🔑</div>
+    <div class="api-banner-text">
+      <div class="api-banner-title">GROQ API KEY REQUIRED</div>
+      <div class="api-banner-sub">Get your free key at console.groq.com → API Keys</div>
+    </div>
+    <div class="api-input-wrap">
+      <input class="api-input" id="api-key-input" type="password"
+        placeholder="gsk_xxxxxxxxxxxxxxxxxxxxxxxx"
+        autocomplete="off" spellcheck="false"/>
+      <button class="btn-save-key" onclick="saveKey()">SAVE</button>
+    </div>
+    <div class="api-status idle" id="api-status">NO KEY</div>
+  </div>
+
+  <!-- STATUS ROW -->
+  <div class="status-row">
+    <div class="status-chip" id="chip-cam">
+      <div class="pip" id="pip-cam"></div>
+      <span id="txt-cam">CAMERA OFF</span>
+    </div>
+    <div class="status-chip" id="chip-ai">
+      <div class="pip" id="pip-ai"></div>
+      <span id="txt-ai">AI STANDBY</span>
+    </div>
+    <div class="status-chip" id="chip-snd">
+      <div class="pip" id="pip-snd"></div>
+      <span id="txt-snd">SOUND OFF</span>
+    </div>
+    <div class="obj-badge" id="obj-badge">0 OBJECTS</div>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div class="main-grid">
+
+    <!-- CAMERA -->
+    <div class="media-card" id="cam-card">
+      <div class="cam-placeholder" id="cam-ph">
+        <svg class="cam-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+          <circle cx="12" cy="13" r="4"/>
+        </svg>
+        <p>CAMERA NOT STARTED</p>
+      </div>
+      <video id="video" autoplay muted playsinline style="display:none;"></video>
+      <canvas id="color-canvas" style="display:none;"></canvas>
+      <div class="media-overlay"></div>
+      <div class="media-chip">LIVE FEED</div>
+      <div class="media-corner"></div>
     </div>
 
-    <div id="start-screen">
-        <div class="content">
-            <h1>🎵 Ambient Lens</h1>
-            <p>Point your camera around the room. Colors and objects become sound.</p>
-            <button id="start-btn">Enter Experience</button>
-            <p class="hint">Requires webcam access • Audio will play</p>
+    <!-- VISUALIZER -->
+    <div class="media-card">
+      <canvas id="viz-canvas"></canvas>
+      <div class="media-overlay"></div>
+      <div class="media-chip">VISUALIZER</div>
+      <div class="media-corner" style="left:12px;right:auto;transform:scaleX(-1);"></div>
+    </div>
+
+  </div>
+
+  <!-- SCENE INFO ROW -->
+  <div class="scene-row">
+    <div class="scene-card">
+      <div class="section-label">DETECTED OBJECTS</div>
+      <div class="tags-wrap" id="tags-wrap">
+        <div class="tag empty">waiting for camera…</div>
+      </div>
+      <div class="swatches">
+        <div class="swatch" id="sw1"></div>
+        <div class="swatch" id="sw2"></div>
+        <div class="swatch" id="sw3"></div>
+        <div class="swatch" id="sw4"></div>
+        <div class="swatch" id="sw5"></div>
+      </div>
+    </div>
+    <div class="colors-card">
+      <div class="color-label">DOM. COLOR</div>
+      <div class="big-swatch" id="big-sw"></div>
+      <div class="color-label" id="color-hex">—</div>
+    </div>
+  </div>
+
+  <!-- AI ANALYSIS -->
+  <div class="ai-card">
+    <div class="section-label">GROQ AI — SCENE ANALYSIS</div>
+    <div class="mood-row">
+      <div class="mood-word" id="mood-word">READY</div>
+      <div class="mood-instrument" id="mood-inst">—</div>
+    </div>
+    <div class="ai-description" id="ai-desc">Start the camera and let AI analyze your room environment to compose a unique soundscape.</div>
+    <div class="params-grid">
+      <div class="param-block">
+        <div class="param-header">
+          <div class="param-name">TEMPO</div>
+          <div class="param-val" id="pv-tempo">—</div>
         </div>
-    </div>
-
-    <div id="app-container" class="hidden">
-        <!-- Video feed (hidden, used for processing) -->
-        <video id="webcam" autoplay playsinline muted></video>
-        
-        <!-- Main visualizer canvas -->
-        <canvas id="visualizer"></canvas>
-        
-        <!-- Detection overlay -->
-        <canvas id="detection-overlay"></canvas>
-
-        <!-- UI Overlay -->
-        <div id="ui-layer">
-            <div id="top-bar">
-                <h2>Ambient Lens</h2>
-                <div id="status">
-                    <span id="fps">0 FPS</span>
-                    <span id="objects-count">0 objects</span>
-                </div>
-            </div>
-
-            <div id="scene-info">
-                <div id="color-palette"></div>
-                <div id="detected-objects"></div>
-            </div>
-
-            <div id="controls">
-                <button id="mute-btn">🔊</button>
-                <button id="record-btn">⏺ Record</button>
-                <button id="fullscreen-btn">⛶</button>
-            </div>
-
-            <div id="audio-params">
-                <div class="param">
-                    <label>Drone</label>
-                    <div class="bar"><div id="drone-bar"></div></div>
-                </div>
-                <div class="param">
-                    <label>Beat</label>
-                    <div class="bar"><div id="beat-bar"></div></div>
-                </div>
-                <div class="param">
-                    <label>Modulation</label>
-                    <div class="bar"><div id="mod-bar"></div></div>
-                </div>
-            </div>
+        <div class="bar-track"><div class="bar-fill" id="bf-tempo" style="width:0%"></div></div>
+      </div>
+      <div class="param-block">
+        <div class="param-header">
+          <div class="param-name">PITCH</div>
+          <div class="param-val" id="pv-pitch">—</div>
         </div>
-
-        <!-- Tap hint -->
-        <div id="tap-hint" class="hidden">Tap any detected object to trigger its sound</div>
+        <div class="bar-track"><div class="bar-fill" id="bf-pitch" style="width:0%"></div></div>
+      </div>
+      <div class="param-block">
+        <div class="param-header">
+          <div class="param-name">INTENSITY</div>
+          <div class="param-val" id="pv-intensity">—</div>
+        </div>
+        <div class="bar-track"><div class="bar-fill" id="bf-intensity" style="width:0%"></div></div>
+      </div>
+      <div class="param-block">
+        <div class="param-header">
+          <div class="param-name">REVERB</div>
+          <div class="param-val" id="pv-reverb">—</div>
+        </div>
+        <div class="bar-track"><div class="bar-fill" id="bf-reverb" style="width:0%"></div></div>
+      </div>
     </div>
+  </div>
 
-    <!-- Scripts -->
-    <script src="js/audioEngine.js"></script>
-    <script src="js/visualEngine.js"></script>
-    <script src="js/objectDetector.js"></script>
-    <script src="js/sceneAnalyzer.js"></script>
-    <script src="js/app.js"></script>
+  <!-- WAVEFORM -->
+  <div class="wave-shell" id="wave-shell"></div>
+
+  <!-- CONTROLS -->
+  <div class="controls">
+    <button class="btn btn-start" id="btn-start" onclick="startApp()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+      START
+    </button>
+    <button class="btn btn-analyze" id="btn-analyze" onclick="analyzeNow()" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+      ANALYZE
+    </button>
+    <button class="btn btn-stop" onclick="stopApp()" title="Stop">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+    </button>
+  </div>
+
+  <!-- LOG -->
+  <div class="log-shell" id="log-shell"></div>
+
+  <div class="footer">ROOMSOUND © 2025 — POWERED BY GROQ LLAMA3 + TONE.JS</div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  🔑  YOU CAN ALSO HARD-CODE YOUR KEY HERE (OPTIONAL)
+//      Leave as empty string to use the input field above
+// ═══════════════════════════════════════════════════════
+let GROQ_API_KEY = '';
+
+// ─── ELEMENTS ───────────────────────────────────────────
+const video       = document.getElementById('video');
+const colorCanvas = document.getElementById('color-canvas');
+const vizCanvas   = document.getElementById('viz-canvas');
+const vizCtx      = vizCanvas.getContext('2d');
+
+// ─── STATE ──────────────────────────────────────────────
+let stream          = null;
+let synth           = null;
+let reverbFx        = null;
+let delayFx         = null;
+let analyzeInterval = null;
+let vizFrame        = null;
+let waveFrame       = null;
+let isRunning       = false;
+let currentParams   = { tempo:80, pitch:440, intensity:0.5, reverb:0.3, instrument:'sine' };
+let ambientLoop     = null;
+
+// ─── WAVE BARS ───────────────────────────────────────────
+const waveShell = document.getElementById('wave-shell');
+const NUM_BARS  = 48;
+for(let i=0;i<NUM_BARS;i++){
+  const b=document.createElement('div');
+  b.className='wbar';
+  b.id='wb'+i;
+  waveShell.appendChild(b);
+}
+
+// ─── API KEY ─────────────────────────────────────────────
+function saveKey() {
+  const val = document.getElementById('api-key-input').value.trim();
+  if(!val) { updateApiStatus('err','NO KEY'); return; }
+  GROQ_API_KEY = val;
+  document.getElementById('api-key-input').classList.add('valid');
+  updateApiStatus('ok','KEY SAVED ✓');
+  log('Groq API key saved', 'good');
+}
+function updateApiStatus(cls, txt) {
+  const el = document.getElementById('api-status');
+  el.className = 'api-status ' + cls;
+  el.textContent = txt;
+}
+document.getElementById('api-key-input').addEventListener('input', function() {
+  this.classList.remove('valid');
+  updateApiStatus('idle', this.value ? 'UNSAVED' : 'NO KEY');
+});
+
+// ─── LOG ─────────────────────────────────────────────────
+function log(msg, type='') {
+  const shell = document.getElementById('log-shell');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry ' + type;
+  const t = new Date().toLocaleTimeString('en',{hour12:false});
+  entry.innerHTML = `<span class="log-time">${t}</span><span class="log-msg">${msg}</span>`;
+  shell.prepend(entry);
+  while(shell.children.length > 30) shell.lastChild.remove();
+}
+
+// ─── STATUS ──────────────────────────────────────────────
+function setPip(id, cls, text, chipId) {
+  document.getElementById(id).className = 'pip ' + cls;
+  document.getElementById(id.replace('pip','txt')).textContent = text;
+  if(chipId) document.getElementById(chipId).classList.toggle('active', !!cls);
+}
+
+// ─── START ───────────────────────────────────────────────
+async function startApp() {
+  if(!GROQ_API_KEY) {
+    log('No API key — please paste your Groq key and click SAVE first', 'warn');
+    document.getElementById('api-key-input').focus();
+    return;
+  }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' }, audio:false });
+    video.srcObject = stream;
+    video.style.display = 'block';
+    document.getElementById('cam-ph').style.display = 'none';
+    setPip('pip-cam','green','CAMERA ON','chip-cam');
+    log('Camera started', 'good');
+    isRunning = true;
+    document.getElementById('btn-analyze').disabled = false;
+    document.getElementById('btn-start').disabled = true;
+
+    await Tone.start();
+    setupSynth();
+    setPip('pip-snd','amber','SOUND ON','chip-snd');
+    log('Audio engine ready', 'good');
+
+    startViz();
+    animateWave();
+    analyzeInterval = setInterval(analyzeNow, 10000);
+    setTimeout(analyzeNow, 1800);
+  } catch(err) {
+    log('Camera error: ' + err.message, 'err');
+  }
+}
+
+// ─── STOP ────────────────────────────────────────────────
+function stopApp() {
+  if(stream)          { stream.getTracks().forEach(t=>t.stop()); stream=null; }
+  if(ambientLoop)     { ambientLoop.dispose(); ambientLoop=null; }
+  if(synth)           { synth.dispose(); synth=null; }
+  if(reverbFx)        { reverbFx.dispose(); reverbFx=null; }
+  if(delayFx)         { delayFx.dispose(); delayFx=null; }
+  if(analyzeInterval) { clearInterval(analyzeInterval); analyzeInterval=null; }
+  if(vizFrame)        { cancelAnimationFrame(vizFrame); vizFrame=null; }
+  if(waveFrame)       { cancelAnimationFrame(waveFrame); waveFrame=null; }
+  Tone.Transport.stop();
+
+  video.style.display='none';
+  document.getElementById('cam-ph').style.display='flex';
+  setPip('pip-cam','','CAMERA OFF','chip-cam');
+  setPip('pip-ai','','AI STANDBY','chip-ai');
+  setPip('pip-snd','','SOUND OFF','chip-snd');
+  document.getElementById('btn-analyze').disabled=true;
+  document.getElementById('btn-start').disabled=false;
+  isRunning=false;
+  log('Session stopped');
+}
+
+// ─── SYNTH ───────────────────────────────────────────────
+function setupSynth() {
+  if(reverbFx) reverbFx.dispose();
+  if(delayFx)  delayFx.dispose();
+  if(synth)    synth.dispose();
+
+  reverbFx = new Tone.Reverb({ decay:3.5, wet: currentParams.reverb }).toDestination();
+  delayFx  = new Tone.FeedbackDelay('8n', 0.25).connect(reverbFx);
+
+  synth = new Tone.PolySynth(Tone.Synth, {
+    oscillator:{ type: currentParams.instrument || 'sine' },
+    envelope:{ attack:0.6, decay:0.4, sustain:0.5, release:2.5 }
+  }).connect(delayFx);
+  synth.volume.value = -12;
+}
+
+// ─── PLAY AMBIENT ─────────────────────────────────────────
+const SCALES = {
+  calm:       ['C4','E4','G4','B4','D5','G5'],
+  energetic:  ['C4','D4','E4','G4','A4','C5','E5'],
+  mysterious: ['C4','Eb4','F#4','Ab4','Bb4','C5'],
+  peaceful:   ['C4','E4','G4','A4','C5','E5'],
+  dark:       ['C3','Eb3','G3','Bb3','C4','Eb4'],
+  intense:    ['C4','D4','F4','G4','Bb4','C5'],
+  dreamy:     ['C4','E4','G4','B4','D5','F#5'],
+  tense:      ['C4','C#4','E4','F4','Ab4','Bb4'],
+};
+
+function playAmbient() {
+  if(ambientLoop) { ambientLoop.dispose(); Tone.Transport.stop(); }
+  if(!synth) return;
+
+  const mood = document.getElementById('mood-word').textContent.toLowerCase();
+  let scale = SCALES.calm;
+  for(const [key,val] of Object.entries(SCALES)) {
+    if(mood.includes(key)) { scale=val; break; }
+  }
+
+  Tone.Transport.bpm.value = currentParams.tempo;
+  ambientLoop = new Tone.Sequence((time, note) => {
+    if(synth) synth.triggerAttackRelease(note, '2n', time, currentParams.intensity * 0.5);
+  }, scale, '2n');
+  ambientLoop.start(0);
+  Tone.Transport.start();
+}
+
+// ─── COLORS ──────────────────────────────────────────────
+function getDominantColors(n=5) {
+  if(!video.videoWidth) return Array(n).fill('#111118');
+  colorCanvas.width=80; colorCanvas.height=60;
+  const ctx=colorCanvas.getContext('2d');
+  ctx.drawImage(video,0,0,80,60);
+  const d=ctx.getImageData(0,0,80,60).data;
+  const buckets={};
+  for(let i=0;i<d.length;i+=12){
+    const r=Math.round(d[i]/40)*40;
+    const g=Math.round(d[i+1]/40)*40;
+    const b=Math.round(d[i+2]/40)*40;
+    const k=`${r},${g},${b}`;
+    buckets[k]=(buckets[k]||0)+1;
+  }
+  const sorted=Object.entries(buckets).sort((a,b)=>b[1]-a[1]);
+  const colors=sorted.slice(0,n).map(([k])=>{
+    const [r,g,b]=k.split(',');
+    return `rgb(${r},${g},${b})`;
+  });
+  while(colors.length<n) colors.push('#111118');
+  return colors;
+}
+
+function rgbToHex(rgb) {
+  const m=rgb.match(/\d+/g);
+  if(!m) return '#111118';
+  return '#'+m.map(x=>parseInt(x).toString(16).padStart(2,'0')).join('');
+}
+
+// ─── HEURISTIC OBJECTS ───────────────────────────────────
+function heuristicObjects(colors) {
+  const canvas=colorCanvas;
+  const ctx=canvas.getContext('2d');
+  if(!video.videoWidth) return ['room'];
+  ctx.drawImage(video,0,0,80,60);
+  const d=ctx.getImageData(0,0,80,60).data;
+  let brightness=0;
+  for(let i=0;i<d.length;i+=4) brightness+=(d[i]+d[i+1]+d[i+2])/3;
+  brightness/=(d.length/4);
+
+  const objs=[];
+  if(brightness>190) objs.push('bright room','window light');
+  else if(brightness>120) objs.push('moderate lighting','interior');
+  else objs.push('dim room','low light');
+
+  // Color-based
+  const [r,g,b]=colors[0].match(/\d+/g)||[0,0,0];
+  if(parseInt(g)>parseInt(r)+30) objs.push('plant','greenery');
+  if(parseInt(b)>parseInt(r)+30) objs.push('blue object','sky');
+  if(parseInt(r)>200 && parseInt(g)>200) objs.push('bright surface');
+  if(parseInt(r)>parseInt(g)+40) objs.push('warm light','wood');
+
+  objs.push('person','desk');
+  return [...new Set(objs)].slice(0,7);
+}
+
+// ─── ANALYZE ─────────────────────────────────────────────
+async function analyzeNow() {
+  if(!isRunning) return;
+  if(!GROQ_API_KEY) { log('No API key set', 'warn'); return; }
+
+  setPip('pip-ai','spin','ANALYZING…','chip-ai');
+  log('Sending scene to Groq AI…', 'info');
+
+  const colors = getDominantColors(5);
+  const hexColors = colors.map(rgbToHex);
+
+  // Update swatches
+  ['sw1','sw2','sw3','sw4','sw5'].forEach((id,i)=>{
+    document.getElementById(id).style.background = colors[i];
+  });
+  document.getElementById('big-sw').style.background = colors[0];
+  document.getElementById('color-hex').textContent = hexColors[0].toUpperCase();
+
+  // Update ambient glow color
+  document.getElementById('ambient-glow').style.background =
+    `radial-gradient(circle, ${colors[0]}, transparent 70%)`;
+
+  const objects = heuristicObjects(colors);
+  document.getElementById('obj-badge').textContent = objects.length + ' OBJECTS';
+  const tagsWrap = document.getElementById('tags-wrap');
+  tagsWrap.innerHTML = objects.map(o=>`<div class="tag">${o}</div>`).join('');
+
+  const prompt = `You are an AI music composer embedded in a room audio visualizer.
+
+Room scene data:
+- Dominant colors (hex): ${hexColors.join(', ')}
+- Detected scene elements: ${objects.join(', ')}
+
+Based on this environment, design a soundscape. Respond ONLY in valid JSON — no extra text, no markdown:
+{
+  "mood": "ONE_WORD_MOOD_IN_CAPS",
+  "description": "One evocative sentence about the soundscape you'd compose for this room.",
+  "tempo": <integer 40-160>,
+  "pitch": <integer 200-800>,
+  "intensity": <float 0.1-1.0>,
+  "reverb": <float 0.1-1.0>,
+  "instrument": "sine|triangle|sawtooth|square"
+}`;
+
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'Authorization':'Bearer ' + GROQ_API_KEY
+      },
+      body:JSON.stringify({
+        model:'llama3-8b-8192',
+        max_tokens:300,
+        temperature:0.7,
+        messages:[
+          { role:'system', content:'You are an AI music composer. Always respond with valid JSON only. No preamble, no markdown.' },
+          { role:'user', content:prompt }
+        ]
+      })
+    });
+
+    if(!res.ok) {
+      const err = await res.json().catch(()=>({}));
+      throw new Error(err?.error?.message || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    const raw  = data.choices?.[0]?.message?.content || '';
+    const clean = raw.replace(/```json|```/g,'').trim();
+    const parsed = JSON.parse(clean);
+
+    // Apply results
+    currentParams = {
+      tempo:     Math.min(160,Math.max(40, parsed.tempo || 80)),
+      pitch:     Math.min(800,Math.max(200,parsed.pitch || 440)),
+      intensity: Math.min(1,Math.max(0.1, parsed.intensity || 0.5)),
+      reverb:    Math.min(1,Math.max(0.1, parsed.reverb || 0.3)),
+      instrument: parsed.instrument || 'sine'
+    };
+
+    document.getElementById('mood-word').textContent = (parsed.mood||'AMBIENT').toUpperCase();
+    document.getElementById('mood-inst').textContent  = (parsed.instrument||'sine').toUpperCase();
+    document.getElementById('ai-desc').textContent    = parsed.description || '';
+
+    // Params display
+    document.getElementById('pv-tempo').textContent     = currentParams.tempo + ' BPM';
+    document.getElementById('pv-pitch').textContent     = currentParams.pitch + ' Hz';
+    document.getElementById('pv-intensity').textContent = Math.round(currentParams.intensity*100) + '%';
+    document.getElementById('pv-reverb').textContent    = Math.round(currentParams.reverb*100)    + '%';
+
+    document.getElementById('bf-tempo').style.width     = ((currentParams.tempo-40)/120*100)+'%';
+    document.getElementById('bf-pitch').style.width     = ((currentParams.pitch-200)/600*100)+'%';
+    document.getElementById('bf-intensity').style.width = (currentParams.intensity*100)+'%';
+    document.getElementById('bf-reverb').style.width    = (currentParams.reverb*100)+'%';
+
+    // Re-setup synth with new params
+    setupSynth();
+    playAmbient();
+
+    setPip('pip-ai','blue','AI ACTIVE','chip-ai');
+    updateApiStatus('ok','KEY OK ✓');
+    log(`Mood: ${parsed.mood} · Tempo: ${currentParams.tempo}bpm · Instrument: ${parsed.instrument}`, 'good');
+
+  } catch(err) {
+    setPip('pip-ai','','AI ERROR','chip-ai');
+    updateApiStatus('err','API ERROR');
+    log('Groq error: ' + err.message, 'err');
+    if(err.message.includes('401') || err.message.includes('invalid')) {
+      log('→ Check your API key is correct', 'warn');
+    }
+  }
+}
+
+// ─── VISUALIZER ──────────────────────────────────────────
+function startViz() {
+  let t=0;
+  function draw() {
+    vizFrame = requestAnimationFrame(draw);
+    const W = vizCanvas.offsetWidth * devicePixelRatio;
+    const H = vizCanvas.offsetHeight * devicePixelRatio;
+    vizCanvas.width=W; vizCanvas.height=H;
+    vizCtx.clearRect(0,0,W,H);
+    t += 0.012 * (currentParams.tempo / 80);
+
+    const cx=W/2, cy=H/2;
+    const intensity = currentParams.intensity;
+    const numRings  = 5;
+
+    for(let r=0;r<numRings;r++) {
+      const pts=60+r*20;
+      const baseR = (0.12+r*0.06)*Math.min(W,H);
+      vizCtx.beginPath();
+      for(let i=0;i<=pts;i++){
+        const angle=(i/pts)*Math.PI*2;
+        const noise = Math.sin(angle*3+t*(1+r*0.3))
+                    * Math.cos(angle*2-t*0.7)
+                    * baseR*0.18*intensity
+                    + Math.sin(angle*5+t*1.5)*baseR*0.06*intensity;
+        const rad=baseR+noise;
+        const x=cx+Math.cos(angle)*rad;
+        const y=cy+Math.sin(angle)*rad;
+        i===0 ? vizCtx.moveTo(x,y) : vizCtx.lineTo(x,y);
+      }
+      vizCtx.closePath();
+      const alpha=0.08+r*0.03;
+      const hue1=260+r*20;
+      const hue2=180+r*15;
+      const grad=vizCtx.createLinearGradient(cx-baseR,cy-baseR,cx+baseR,cy+baseR);
+      grad.addColorStop(0,`hsla(${hue1},80%,60%,${alpha+intensity*0.1})`);
+      grad.addColorStop(1,`hsla(${hue2},90%,65%,${alpha})`);
+      vizCtx.strokeStyle=grad;
+      vizCtx.lineWidth=1+r*0.5;
+      vizCtx.stroke();
+    }
+
+    // Center pulse
+    const pulseR = 20*(0.8+Math.sin(t*2)*0.2)*intensity;
+    const grd=vizCtx.createRadialGradient(cx,cy,0,cx,cy,pulseR*2);
+    grd.addColorStop(0,`rgba(139,92,246,${0.3*intensity})`);
+    grd.addColorStop(1,'transparent');
+    vizCtx.beginPath();
+    vizCtx.arc(cx,cy,pulseR*2,0,Math.PI*2);
+    vizCtx.fillStyle=grd;
+    vizCtx.fill();
+  }
+  draw();
+}
+
+// ─── WAVE ANIMATION ──────────────────────────────────────
+let wavePhase=0;
+function animateWave() {
+  waveFrame=requestAnimationFrame(animateWave);
+  wavePhase+=0.04*(currentParams.tempo/80);
+  for(let i=0;i<NUM_BARS;i++){
+    const b=document.getElementById('wb'+i);
+    if(!b) continue;
+    const x=i/NUM_BARS;
+    const h=Math.max(2,
+      (Math.sin(x*Math.PI*3+wavePhase)*0.4
+      +Math.sin(x*Math.PI*7-wavePhase*1.3)*0.3
+      +Math.sin(x*Math.PI*1.5+wavePhase*0.7)*0.3)*24*currentParams.intensity+24
+    );
+    b.style.height=h+'px';
+  }
+}
+</script>
 </body>
 </html>
